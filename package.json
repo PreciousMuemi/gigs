@@ -10,6 +10,9 @@
     "start:ussd": "node src/ussdServerIndex.js",
     "dev:ussd": "nodemon src/ussdServerIndex.js",
     "test:ussd": "node src/scripts/testUssd.js",
+    "test:sms": "node src/scripts/smsExamples.js",
+    "test:escrow": "node src/scripts/escrowDemo.js",
+    "test:ratings": "node src/scripts/ratingDemo.js",
     "db:init": "node src/scripts/initDb.js"
   },
   "dependencies": {
