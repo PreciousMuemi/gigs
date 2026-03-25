@@ -1,6 +1,221 @@
 const repo = require('../repositories/platformRepository');
 const notify = require('./notificationService');
 
+let dbFallbackMode = false;
+const memoryStore = {
+  sessions: new Map(),
+  usersByPhone: new Map(),
+  jobs: [],
+  ratings: [],
+};
+
+function makeId(prefix) {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function useFallback(error) {
+  if (dbFallbackMode) return true;
+  const msg = String(error?.message || error || '');
+  if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|getaddrinfo|connect/i.test(msg)) {
+    dbFallbackMode = true;
+    return true;
+  }
+  return false;
+}
+
+function memoryGetSession(sessionId) {
+  return memoryStore.sessions.get(sessionId) || null;
+}
+
+function memoryUpsertSession({ sessionId, phone, state, context }) {
+  memoryStore.sessions.set(sessionId, {
+    session_id: sessionId,
+    phone,
+    state,
+    context_json: context || {},
+  });
+}
+
+function memoryDeleteSession(sessionId) {
+  memoryStore.sessions.delete(sessionId);
+}
+
+function memoryUpsertUserByPhone({ phone, fullName, role, region }) {
+  const existing = memoryStore.usersByPhone.get(phone);
+  if (existing) {
+    existing.full_name = fullName || existing.full_name;
+    existing.role = role || existing.role;
+    existing.region = region || existing.region;
+    return existing;
+  }
+
+  const user = {
+    id: makeId('usr'),
+    phone,
+    full_name: fullName || 'User',
+    role: role || 'freelancer',
+    region: region || null,
+    skill_name: null,
+    avg_rating: 0,
+  };
+  memoryStore.usersByPhone.set(phone, user);
+  return user;
+}
+
+function memoryUpsertUserSkillByName({ userId, skillName }) {
+  for (const user of memoryStore.usersByPhone.values()) {
+    if (user.id === userId) {
+      user.skill_name = skillName;
+      break;
+    }
+  }
+}
+
+function memoryFindFreelancersBySkill(skill, limit) {
+  const query = String(skill || '').toLowerCase();
+  return Array.from(memoryStore.usersByPhone.values())
+    .filter((u) => u.role === 'freelancer' && String(u.skill_name || '').toLowerCase().includes(query))
+    .slice(0, limit)
+    .map((u) => ({
+      id: u.id,
+      full_name: u.full_name,
+      phone: u.phone,
+      avg_rating: u.avg_rating || 0,
+    }));
+}
+
+function memoryCreateJob({ clientId, title, budget, currency }) {
+  const job = {
+    id: makeId('job'),
+    client_id: clientId,
+    title,
+    budget,
+    currency,
+  };
+  memoryStore.jobs.push(job);
+  return job;
+}
+
+function memoryCreateRatingByPhones({ fromPhone, toPhone, score }) {
+  const fromUser = memoryStore.usersByPhone.get(fromPhone) || memoryUpsertUserByPhone({
+    phone: fromPhone,
+    fullName: 'User',
+    role: 'client',
+  });
+  const toUser = memoryStore.usersByPhone.get(toPhone);
+  if (!toUser) throw new Error('Target user not found');
+
+  memoryStore.ratings.push({
+    id: makeId('rat'),
+    from_user_id: fromUser.id,
+    to_user_id: toUser.id,
+    score,
+  });
+
+  const ratings = memoryStore.ratings.filter((r) => r.to_user_id === toUser.id);
+  toUser.avg_rating = ratings.reduce((sum, r) => sum + r.score, 0) / ratings.length;
+}
+
+async function getSession(sessionId) {
+  if (dbFallbackMode) return memoryGetSession(sessionId);
+  try {
+    return await repo.getSession(sessionId);
+  } catch (error) {
+    if (useFallback(error)) return memoryGetSession(sessionId);
+    throw error;
+  }
+}
+
+async function upsertSession(data) {
+  if (dbFallbackMode) return memoryUpsertSession(data);
+  try {
+    return await repo.upsertSession(data);
+  } catch (error) {
+    if (useFallback(error)) return memoryUpsertSession(data);
+    throw error;
+  }
+}
+
+async function deleteSession(sessionId) {
+  if (dbFallbackMode) return memoryDeleteSession(sessionId);
+  try {
+    return await repo.deleteSession(sessionId);
+  } catch (error) {
+    if (useFallback(error)) return memoryDeleteSession(sessionId);
+    throw error;
+  }
+}
+
+async function upsertUserByPhone(data) {
+  if (dbFallbackMode) return memoryUpsertUserByPhone(data);
+  try {
+    return await repo.upsertUserByPhone(data);
+  } catch (error) {
+    if (useFallback(error)) return memoryUpsertUserByPhone(data);
+    throw error;
+  }
+}
+
+async function upsertUserSkillByName(data) {
+  if (dbFallbackMode) return memoryUpsertUserSkillByName(data);
+  try {
+    return await repo.upsertUserSkillByName(data);
+  } catch (error) {
+    if (useFallback(error)) return memoryUpsertUserSkillByName(data);
+    throw error;
+  }
+}
+
+async function writeAudit(data) {
+  if (dbFallbackMode) return undefined;
+  try {
+    return await repo.writeAudit(data);
+  } catch (error) {
+    if (useFallback(error)) return undefined;
+    throw error;
+  }
+}
+
+async function getUserByPhone(phone) {
+  if (dbFallbackMode) return memoryStore.usersByPhone.get(phone) || null;
+  try {
+    return await repo.getUserByPhone(phone);
+  } catch (error) {
+    if (useFallback(error)) return memoryStore.usersByPhone.get(phone) || null;
+    throw error;
+  }
+}
+
+async function createJob(data) {
+  if (dbFallbackMode) return memoryCreateJob(data);
+  try {
+    return await repo.createJob(data);
+  } catch (error) {
+    if (useFallback(error)) return memoryCreateJob(data);
+    throw error;
+  }
+}
+
+async function findFreelancersBySkill(skill, limit) {
+  if (dbFallbackMode) return memoryFindFreelancersBySkill(skill, limit);
+  try {
+    return await repo.findFreelancersBySkill(skill, limit);
+  } catch (error) {
+    if (useFallback(error)) return memoryFindFreelancersBySkill(skill, limit);
+    throw error;
+  }
+}
+
+async function createRatingByPhones(data) {
+  if (dbFallbackMode) return memoryCreateRatingByPhones(data);
+  try {
+    return await repo.createRatingByPhones(data);
+  } catch (error) {
+    if (useFallback(error)) return memoryCreateRatingByPhones(data);
+    throw error;
+  }
+}
+
 const STATES = {
   MAIN_MENU: 'MAIN_MENU',
   REGISTER_FREELANCER_NAME: 'REGISTER_FREELANCER_NAME',
@@ -24,10 +239,10 @@ function end(message) {
 }
 
 async function handleUssd({ sessionId, phoneNumber, text }) {
-  const existingSession = await repo.getSession(sessionId);
+  const existingSession = await getSession(sessionId);
 
   if (!existingSession) {
-    await repo.upsertSession({
+    await upsertSession({
       sessionId,
       phone: phoneNumber,
       state: STATES.MAIN_MENU,
@@ -50,7 +265,7 @@ async function handleUssd({ sessionId, phoneNumber, text }) {
   const ctx = existingSession.context_json || {};
 
   if (input === '0') {
-    await repo.deleteSession(sessionId);
+    await deleteSession(sessionId);
     return end('Goodbye.');
   }
 
@@ -78,7 +293,7 @@ async function handleUssd({ sessionId, phoneNumber, text }) {
     case STATES.RATE_FREELANCER_SCORE:
       return handleRateFreelancerScore({ sessionId, phoneNumber, input, ctx });
     default:
-      await repo.upsertSession({
+      await upsertSession({
         sessionId,
         phone: phoneNumber,
         state: STATES.MAIN_MENU,
@@ -96,7 +311,7 @@ function getLatestInput(text) {
 
 async function handleMainMenu({ sessionId, phoneNumber, input }) {
   if (input === '1') {
-    await repo.upsertSession({
+    await upsertSession({
       sessionId,
       phone: phoneNumber,
       state: STATES.REGISTER_FREELANCER_NAME,
@@ -106,7 +321,7 @@ async function handleMainMenu({ sessionId, phoneNumber, input }) {
   }
 
   if (input === '2') {
-    await repo.upsertSession({
+    await upsertSession({
       sessionId,
       phone: phoneNumber,
       state: STATES.REGISTER_CLIENT_NAME,
@@ -116,7 +331,7 @@ async function handleMainMenu({ sessionId, phoneNumber, input }) {
   }
 
   if (input === '3') {
-    await repo.upsertSession({
+    await upsertSession({
       sessionId,
       phone: phoneNumber,
       state: STATES.POST_JOB_TITLE,
@@ -126,7 +341,7 @@ async function handleMainMenu({ sessionId, phoneNumber, input }) {
   }
 
   if (input === '4') {
-    await repo.upsertSession({
+    await upsertSession({
       sessionId,
       phone: phoneNumber,
       state: STATES.FIND_FREELANCER_SKILL,
@@ -136,7 +351,7 @@ async function handleMainMenu({ sessionId, phoneNumber, input }) {
   }
 
   if (input === '5') {
-    await repo.upsertSession({
+    await upsertSession({
       sessionId,
       phone: phoneNumber,
       state: STATES.RATE_FREELANCER_PHONE,
@@ -151,7 +366,7 @@ async function handleMainMenu({ sessionId, phoneNumber, input }) {
 async function handleRegisterFreelancerName({ sessionId, phoneNumber, input }) {
   if (!input || input.length < 3) return con('Name too short. Enter full name:');
 
-  await repo.upsertSession({
+  await upsertSession({
     sessionId,
     phone: phoneNumber,
     state: STATES.REGISTER_FREELANCER_SKILL,
@@ -164,21 +379,21 @@ async function handleRegisterFreelancerName({ sessionId, phoneNumber, input }) {
 async function handleRegisterFreelancerSkill({ sessionId, phoneNumber, input, ctx }) {
   if (!input || input.length < 2) return con('Skill too short. Enter your main skill:');
 
-  const user = await repo.upsertUserByPhone({
+  const user = await upsertUserByPhone({
     phone: phoneNumber,
     fullName: ctx.fullName,
     role: 'freelancer',
   });
-  await repo.upsertUserSkillByName({ userId: user.id, skillName: input });
+  await upsertUserSkillByName({ userId: user.id, skillName: input });
 
-  await repo.writeAudit({
+  await writeAudit({
     actorType: 'user',
     actorId: user.id,
     action: 'user.register.freelancer',
     payload: { phone: phoneNumber, skill: input },
   });
 
-  await repo.deleteSession(sessionId);
+  await deleteSession(sessionId);
   try {
     await notify.sendSms(phoneNumber, `Welcome ${ctx.fullName}. Freelancer profile created with skill: ${input}.`);
   } catch (_) {
@@ -191,7 +406,7 @@ async function handleRegisterFreelancerSkill({ sessionId, phoneNumber, input, ct
 async function handleRegisterClientName({ sessionId, phoneNumber, input }) {
   if (!input || input.length < 3) return con('Name too short. Enter full name:');
 
-  await repo.upsertSession({
+  await upsertSession({
     sessionId,
     phone: phoneNumber,
     state: STATES.REGISTER_CLIENT_LOCATION,
@@ -204,21 +419,21 @@ async function handleRegisterClientName({ sessionId, phoneNumber, input }) {
 async function handleRegisterClientLocation({ sessionId, phoneNumber, input, ctx }) {
   if (!input || input.length < 2) return con('Location too short. Enter town/city:');
 
-  const user = await repo.upsertUserByPhone({
+  const user = await upsertUserByPhone({
     phone: phoneNumber,
     fullName: ctx.fullName,
     role: 'client',
     region: input,
   });
 
-  await repo.writeAudit({
+  await writeAudit({
     actorType: 'user',
     actorId: user.id,
     action: 'user.register.client',
     payload: { phone: phoneNumber, location: input },
   });
 
-  await repo.deleteSession(sessionId);
+  await deleteSession(sessionId);
   try {
     await notify.sendSms(phoneNumber, `Welcome ${ctx.fullName}. Client profile created for ${input}.`);
   } catch (_) {
@@ -231,8 +446,8 @@ async function handleRegisterClientLocation({ sessionId, phoneNumber, input, ctx
 async function handlePostJobTitle({ sessionId, input }) {
   if (!input || input.length < 4) return con('Title too short. Enter job title:');
 
-  const session = await repo.getSession(sessionId);
-  await repo.upsertSession({
+  const session = await getSession(sessionId);
+  await upsertSession({
     sessionId,
     phone: session.phone,
     state: STATES.POST_JOB_BUDGET,
@@ -249,33 +464,33 @@ async function handlePostJobBudget({ sessionId, phoneNumber, input, ctx }) {
   const budget = Number(input);
   if (!Number.isFinite(budget) || budget <= 0) return con('Invalid budget. Enter amount in KES:');
 
-  const currentUser = await repo.getUserByPhone(phoneNumber);
+  const currentUser = await getUserByPhone(phoneNumber);
   if (!currentUser) return end('Please register as client first.');
 
-  const job = await repo.createJob({
+  const job = await createJob({
     clientId: currentUser.id,
     title: ctx.title,
     budget,
     currency: 'KES',
   });
 
-  await repo.writeAudit({
+  await writeAudit({
     actorType: 'user',
     actorId: currentUser.id,
     action: 'job.posted',
     payload: { jobId: job.id, title: job.title, budget },
   });
 
-  await repo.deleteSession(sessionId);
+  await deleteSession(sessionId);
   return end(`Job posted successfully. Ref: ${job.id.slice(0, 8).toUpperCase()}`);
 }
 
 async function handleFindFreelancerSkill({ sessionId, phoneNumber, input }) {
   if (!input || input.length < 2) return con('Skill too short. Enter required skill:');
 
-  const freelancers = await repo.findFreelancersBySkill(input, 3);
+  const freelancers = await findFreelancersBySkill(input, 3);
   if (!freelancers.length) {
-    await repo.deleteSession(sessionId);
+    await deleteSession(sessionId);
     return end('No freelancers found for that skill.');
   }
 
@@ -283,7 +498,7 @@ async function handleFindFreelancerSkill({ sessionId, phoneNumber, input }) {
     .map((f, i) => `${i + 1}. ${f.full_name || 'Freelancer'} - ${Number(f.avg_rating).toFixed(1)}`)
     .join('\n');
 
-  await repo.upsertSession({
+  await upsertSession({
     sessionId,
     phone: phoneNumber,
     state: STATES.FIND_FREELANCER_SELECT,
@@ -309,7 +524,7 @@ async function handleFindFreelancerSelect({ sessionId, phoneNumber, input, ctx }
   }
 
   const selected = options[idx];
-  await repo.deleteSession(sessionId);
+  await deleteSession(sessionId);
 
   try {
     await notify.sendSms(
@@ -326,7 +541,7 @@ async function handleFindFreelancerSelect({ sessionId, phoneNumber, input, ctx }
 async function handleRateFreelancerPhone({ sessionId, phoneNumber, input }) {
   if (!input || input.length < 8) return con('Invalid phone number. Enter freelancer phone number:');
 
-  await repo.upsertSession({
+  await upsertSession({
     sessionId,
     phone: phoneNumber,
     state: STATES.RATE_FREELANCER_SCORE,
@@ -341,17 +556,17 @@ async function handleRateFreelancerScore({ sessionId, phoneNumber, input, ctx })
   if (!Number.isInteger(score) || score < 1 || score > 5) return con('Invalid rating. Enter a score from 1 to 5:');
 
   try {
-    await repo.createRatingByPhones({
+    await createRatingByPhones({
       fromPhone: phoneNumber,
       toPhone: ctx.freelancerPhone,
       score,
     });
   } catch (error) {
-    await repo.deleteSession(sessionId);
+    await deleteSession(sessionId);
     return end('Rating failed. Ensure you have a completed contract with this freelancer.');
   }
 
-  await repo.deleteSession(sessionId);
+  await deleteSession(sessionId);
   return end('Rating submitted. Thank you.');
 }
 

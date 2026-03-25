@@ -3,6 +3,7 @@
 ## Overview
 
 Simple 1-5 star rating system where:
+
 - **Client rates freelancer** after job completion
 - **Freelancer rates client** after payment
 - **Average ratings** calculated and displayed on profiles
@@ -26,6 +27,7 @@ CREATE TABLE ratings (
 ```
 
 **Key points:**
+
 - One rating per contract per person (can't rate same person twice)
 - Links to contract (ensures they worked together)
 - Simple 1-5 score
@@ -54,6 +56,7 @@ WHERE to_user_id = $1;
 **User dials** `*123#` → Already in KaziLink
 
 **Level 1: Main Menu**
+
 ```
 CON Welcome to KaziLink
 1. Register Freelancer
@@ -65,29 +68,34 @@ CON Welcome to KaziLink
 ```
 
 **Level 2: Enter freelancer phone**
+
 ```
 CON Enter freelancer phone number:
 User enters: +254712345678
 ```
 
 **Level 3: Rate (1-5)**
+
 ```
 CON Rate freelancer (1-5):
 User enters: 5
 ```
 
 **Level 4: Optional comment**
+
 ```
 CON Any comments? (optional)
 User enters: Great work!
 ```
 
 **Level 5: Confirmation**
+
 ```
 END Rating submitted. Freelancer notified.
 ```
 
 **Freelancer receives SMS:**
+
 ```
 "You received a 5-star rating! Your avg: 4.8/5 (12 ratings)."
 ```
@@ -97,24 +105,24 @@ END Rating submitted. Freelancer notified.
 ## Code Example: Rate via API
 
 ```javascript
-const ratingService = require('./services/ratingService');
-const repo = require('./repositories/platformRepository');
+const ratingService = require("./services/ratingService");
+const repo = require("./repositories/platformRepository");
 
 // Create a rating
 const rating = await repo.createRating({
-  contractId: 'contract-uuid',
-  fromUserId: 'client-uuid',
-  toUserId: 'freelancer-uuid',
+  contractId: "contract-uuid",
+  fromUserId: "client-uuid",
+  toUserId: "freelancer-uuid",
   score: 5,
-  comment: 'Excellent work!',
+  comment: "Excellent work!",
 });
 
 // Get freelancer's average
-const avg = await ratingService.getAverageRating('freelancer-uuid');
+const avg = await ratingService.getAverageRating("freelancer-uuid");
 console.log(`${avg.avgScore}/5 from ${avg.totalRatings} ratings`);
 
 // Get rating distribution
-const dist = await ratingService.getRatingDistribution('freelancer-uuid');
+const dist = await ratingService.getRatingDistribution("freelancer-uuid");
 // { 5: 10, 4: 2, 3: 0, 2: 0, 1: 0 }
 ```
 
@@ -124,7 +132,7 @@ const dist = await ratingService.getRatingDistribution('freelancer-uuid');
 
 ```javascript
 function displayFreelancerProfile(rating, totalRatings) {
-  const stars = '⭐'.repeat(Math.round(rating));
+  const stars = "⭐".repeat(Math.round(rating));
   return `${stars} ${rating.toFixed(1)}/5 (${totalRatings} ratings)`;
 }
 
@@ -135,12 +143,12 @@ function displayFreelancerProfile(rating, totalRatings) {
 
 ## Key Files
 
-| File | Purpose |
-|------|---------|
-| `src/services/ratingService.js` | Calculate avg, distribution, recent ratings |
-| `src/scripts/ratingDemo.js` | Demo USSD flow + rating workflow |
-| `src/services/ussdStateMachine.js` | Lines 278-319: USSD rating states |
-| `src/repositories/platformRepository.js` | `createRating()` function |
+| File                                     | Purpose                                     |
+| ---------------------------------------- | ------------------------------------------- |
+| `src/services/ratingService.js`          | Calculate avg, distribution, recent ratings |
+| `src/scripts/ratingDemo.js`              | Demo USSD flow + rating workflow            |
+| `src/services/ussdStateMachine.js`       | Lines 278-319: USSD rating states           |
+| `src/repositories/platformRepository.js` | `createRating()` function                   |
 
 ---
 
@@ -151,6 +159,7 @@ npm run test:ratings
 ```
 
 Shows:
+
 1. Client rates freelancer (5 stars)
 2. System calculates average
 3. Freelancer rates client (4 stars)

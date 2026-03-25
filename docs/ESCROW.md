@@ -16,17 +16,17 @@
 ### Step 1: Client Initiates STK Push (M-Pesa Payment)
 
 ```javascript
-const paymentEscrow = require('../services/paymentEscrowService');
+const paymentEscrow = require("../services/paymentEscrowService");
 
 // After freelancer is accepted
 const result = await paymentEscrow.initiateFunding({
   contract: {
-    id: 'contract-uuid',
+    id: "contract-uuid",
     agreed_amount: 3500,
-    currency: 'KES',
-    job_id: 'job-uuid',
+    currency: "KES",
+    job_id: "job-uuid",
   },
-  clientPhone: '+254712345678',
+  clientPhone: "+254712345678",
 });
 
 // Africa's Talking sends STK push to client's phone
@@ -52,17 +52,17 @@ Africa's Talking POSTs to your webhook (`/webhooks/payments`):
 Your backend processes it:
 
 ```javascript
-const paymentEscrow = require('../services/paymentEscrowService');
+const paymentEscrow = require("../services/paymentEscrowService");
 
-app.post('/webhooks/payments', async (req, res) => {
+app.post("/webhooks/payments", async (req, res) => {
   const outcome = await paymentEscrow.handleFundingWebhook(req.body);
-  
-  if (outcome.ok && outcome.status === 'success') {
+
+  if (outcome.ok && outcome.status === "success") {
     // Contract moved to 'in_progress'
     // Freelancer can now start work
     // SMS sent to both parties
   }
-  
+
   res.json({ received: true });
 });
 ```
@@ -70,7 +70,7 @@ app.post('/webhooks/payments', async (req, res) => {
 ### Step 3: Freelancer Marks Work Complete
 
 ```javascript
-const contracts = require('../services/contractService');
+const contracts = require("../services/contractService");
 
 await contracts.markWorkSubmitted(contractId);
 // Contract status: 'work_submitted'
@@ -109,7 +109,7 @@ CREATE TABLE escrow_transactions (
 **States per contract:**
 
 ```
-awaiting_escrow → (STK sent) → in_progress → work_submitted 
+awaiting_escrow → (STK sent) → in_progress → work_submitted
                                   ↓
                             Client confirms
                                   ↓
@@ -124,7 +124,7 @@ awaiting_escrow → (STK sent) → in_progress → work_submitted
 For a quick demo without real payments:
 
 ```javascript
-const escrowDemo = require('../scripts/escrowDemo');
+const escrowDemo = require("../scripts/escrowDemo");
 
 // 1. Client funds (instant in mock mode)
 await escrowDemo.mockClientFundsEscrow({ contractId });
@@ -138,14 +138,15 @@ await escrowDemo.clientConfirmsAndReleases({ contractId });
 // 4. Rating
 await escrowDemo.clientRatesFreelancer({
   contractId,
-  fromUserId: 'client-id',
-  toUserId: 'freelancer-id',
+  fromUserId: "client-id",
+  toUserId: "freelancer-id",
   score: 5,
-  comment: 'Great work!',
+  comment: "Great work!",
 });
 ```
 
 **Run it:**
+
 ```bash
 node src/scripts/escrowDemo.js
 ```
@@ -156,12 +157,12 @@ This logs the full flow without requiring a database or real M-Pesa.
 
 ## Key Files
 
-| File | Purpose |
-|------|---------|
-| `src/services/paymentEscrowService.js` | Real M-Pesa escrow logic |
-| `src/services/contractService.js` | Contract lifecycle (mark complete, release) |
-| `src/scripts/escrowDemo.js` | Hackathon-friendly mock workflow |
-| `src/routes/webhookRoutes.js` | Handles Africa's Talking callbacks |
+| File                                   | Purpose                                     |
+| -------------------------------------- | ------------------------------------------- |
+| `src/services/paymentEscrowService.js` | Real M-Pesa escrow logic                    |
+| `src/services/contractService.js`      | Contract lifecycle (mark complete, release) |
+| `src/scripts/escrowDemo.js`            | Hackathon-friendly mock workflow            |
+| `src/routes/webhookRoutes.js`          | Handles Africa's Talking callbacks          |
 
 ---
 
@@ -193,13 +194,13 @@ const idempotencyKey = `fund-${contractId}-${Date.now()}`;
 async function refundEscrow(contractId, reason) {
   await repo.insertEscrowTx({
     contractId,
-    type: 'refund',
+    type: "refund",
     amount: contract.agreed_amount,
-    status: 'success',
+    status: "success",
     rawPayload: { dispute_reason: reason },
   });
-  
-  await repo.setContractStatus(contractId, 'refunded');
+
+  await repo.setContractStatus(contractId, "refunded");
   // Money returns to client's M-Pesa account
 }
 ```

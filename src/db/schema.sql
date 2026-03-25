@@ -128,3 +128,5 @@ CREATE INDEX IF NOT EXISTS idx_jobs_client ON jobs(client_id);
 CREATE INDEX IF NOT EXISTS idx_applications_job ON job_applications(job_id);
 CREATE INDEX IF NOT EXISTS idx_contracts_status ON contracts(status);
 CREATE INDEX IF NOT EXISTS idx_escrow_contract ON escrow_transactions(contract_id);
+CREATE INDEX IF NOT EXISTS idx_ussd_sessions_phone ON ussd_sessions(phone);
+CREATE INDEX IF NOT EXISTS idx_ussd_sessions_expires_at ON ussd_sessions(expires_at);

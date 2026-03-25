@@ -13,7 +13,10 @@
     "test:sms": "node src/scripts/smsExamples.js",
     "test:escrow": "node src/scripts/escrowDemo.js",
     "test:ratings": "node src/scripts/ratingDemo.js",
-    "db:init": "node src/scripts/initDb.js"
+    "test:live": "node src/scripts/testLive.js",
+    "db:probe": "node src/scripts/probeSupabasePooler.js",
+    "db:init": "node src/scripts/initDb.js",
+    "db:verify": "node src/scripts/verifyDbTables.js"
   },
   "dependencies": {
     "axios": "^1.7.7",
