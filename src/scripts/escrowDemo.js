@@ -11,7 +11,7 @@
  */
 
 const repo = require('../repositories/platformRepository');
-const notify = require('./notificationService');
+const notify = require('../services/notificationService');
 
 // ============================================================================
 // STEP 1: Mock Escrow Funding (Client approves payment via STK)
@@ -162,9 +162,56 @@ async function runHackathonDemo() {
   console.log('=== Hackathon Escrow Demo ===\n');
 
   try {
-    // Create fake contract (in real flow, this comes from job acceptance)
-    // For this demo, assume contractId exists
-    const contractId = '550e8400-e29b-41d4-a716-446655440000'; // placeholder UUID
+    // Use existing contract if present, otherwise create demo entities.
+    let contractId = '550e8400-e29b-41d4-a716-446655440000'; // legacy placeholder
+    let contract = await repo.getContractById(contractId);
+
+    if (!contract) {
+      const client = await repo.upsertUserByPhone({
+        phone: '+254700111111',
+        fullName: 'Demo Client',
+        role: 'client',
+        region: 'Nairobi',
+      });
+
+      const freelancer = await repo.upsertUserByPhone({
+        phone: '+254700222222',
+        fullName: 'Demo Freelancer',
+        role: 'freelancer',
+      });
+
+      await repo.upsertUserSkillByName({
+        userId: freelancer.id,
+        skillName: 'plumbing',
+      });
+
+      const job = await repo.createJob({
+        clientId: client.id,
+        title: 'Fix kitchen sink',
+        description: 'Leaking kitchen sink needs repair',
+        budget: 1500,
+        currency: 'KES',
+      });
+
+      const app = await repo.createApplication({
+        jobId: job.id,
+        freelancerId: freelancer.id,
+        bidAmount: 1400,
+        coverNote: 'Can complete today',
+      });
+
+      contract = await repo.createContractFromApplication({
+        jobId: job.id,
+        clientId: client.id,
+        freelancerId: freelancer.id,
+        agreedAmount: app.bid_amount,
+        currency: 'KES',
+      });
+
+      contractId = contract.id;
+      // eslint-disable-next-line no-console
+      console.log(`ℹ️ Created demo contract: ${contractId.slice(0, 8)}`);
+    }
 
     // eslint-disable-next-line no-console
     console.log('1️⃣ Client funds escrow (mock STK push)...');
@@ -186,15 +233,26 @@ async function runHackathonDemo() {
 
     // eslint-disable-next-line no-console
     console.log('4️⃣ Both parties rate each other...');
+    const parties = await repo.getContractParties(contractId);
     await clientRatesFreelancer({
       contractId,
-      fromUserId: 'client-uuid-here',
-      toUserId: 'freelancer-uuid-here',
+      fromUserId: parties.client_id,
+      toUserId: parties.freelancer_id,
       score: 5,
       comment: 'Excellent work, very professional',
     });
     // eslint-disable-next-line no-console
     console.log('✓ Client rated freelancer 5/5\n');
+
+    await freelancerRatesClient({
+      contractId,
+      fromUserId: parties.freelancer_id,
+      toUserId: parties.client_id,
+      score: 5,
+      comment: 'Great client, clear instructions',
+    });
+    // eslint-disable-next-line no-console
+    console.log('✓ Freelancer rated client 5/5\n');
 
     // eslint-disable-next-line no-console
     console.log('✓ Demo complete! Full escrow workflow successful.\n');
