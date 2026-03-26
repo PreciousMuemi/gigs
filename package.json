@@ -13,7 +13,9 @@
     "test:sms": "node src/scripts/smsExamples.js",
     "test:escrow": "node src/scripts/escrowDemo.js",
     "test:ratings": "node src/scripts/ratingDemo.js",
+    "test:ussd:market": "node src/scripts/testUssdMarketReadiness.js",
     "test:live": "node src/scripts/testLive.js",
+    "seed:demo": "node src/scripts/seedDemoData.js",
     "db:probe": "node src/scripts/probeSupabasePooler.js",
     "db:init": "node src/scripts/initDb.js",
     "db:verify": "node src/scripts/verifyDbTables.js"

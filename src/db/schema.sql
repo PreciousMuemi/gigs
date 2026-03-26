@@ -123,6 +123,19 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS work_verifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  contract_id UUID NOT NULL UNIQUE REFERENCES contracts(id) ON DELETE CASCADE,
+  verifier_phone VARCHAR(20) NOT NULL,
+  leak_fixed BOOLEAN NOT NULL,
+  flow_restored BOOLEAN NOT NULL,
+  callback_needed BOOLEAN NOT NULL,
+  decision VARCHAR(20) NOT NULL CHECK (decision IN ('confirmed', 'disputed')),
+  notes VARCHAR(320),
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_client ON jobs(client_id);
 CREATE INDEX IF NOT EXISTS idx_applications_job ON job_applications(job_id);
@@ -130,3 +143,4 @@ CREATE INDEX IF NOT EXISTS idx_contracts_status ON contracts(status);
 CREATE INDEX IF NOT EXISTS idx_escrow_contract ON escrow_transactions(contract_id);
 CREATE INDEX IF NOT EXISTS idx_ussd_sessions_phone ON ussd_sessions(phone);
 CREATE INDEX IF NOT EXISTS idx_ussd_sessions_expires_at ON ussd_sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_work_verifications_contract ON work_verifications(contract_id);

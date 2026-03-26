@@ -297,6 +297,66 @@ async function getContractParties(contractId) {
   return rows[0] || null;
 }
 
+async function getContractByRefForPhone({ contractRef, phone }) {
+  const normalizedRef = String(contractRef || '').trim().toLowerCase();
+  const normalizedPhone = String(phone || '').replace(/^\+/, '');
+  const { rows } = await pool.query(
+    `SELECT
+      c.id,
+      c.job_id,
+      c.status,
+      c.agreed_amount,
+      c.currency,
+      cu.phone AS client_phone,
+      fu.phone AS freelancer_phone
+     FROM contracts c
+     JOIN users cu ON cu.id = c.client_id
+     JOIN users fu ON fu.id = c.freelancer_id
+     WHERE left(lower(c.id::text), 8) = $1
+       AND (
+         regexp_replace(cu.phone, '^\\+', '') = $2
+         OR regexp_replace(fu.phone, '^\\+', '') = $2
+       )
+     LIMIT 1`,
+    [normalizedRef, normalizedPhone],
+  );
+  return rows[0] || null;
+}
+
+async function upsertWorkVerification({
+  contractId,
+  verifierPhone,
+  leakFixed,
+  flowRestored,
+  callbackNeeded,
+  decision,
+  notes = null,
+}) {
+  const { rows } = await pool.query(
+    `INSERT INTO work_verifications (
+      contract_id,
+      verifier_phone,
+      leak_fixed,
+      flow_restored,
+      callback_needed,
+      decision,
+      notes
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    ON CONFLICT (contract_id) DO UPDATE SET
+      verifier_phone = EXCLUDED.verifier_phone,
+      leak_fixed = EXCLUDED.leak_fixed,
+      flow_restored = EXCLUDED.flow_restored,
+      callback_needed = EXCLUDED.callback_needed,
+      decision = EXCLUDED.decision,
+      notes = EXCLUDED.notes,
+      updated_at = NOW()
+    RETURNING *`,
+    [contractId, verifierPhone, leakFixed, flowRestored, callbackNeeded, decision, notes],
+  );
+  return rows[0];
+}
+
 async function logSms({ phone, message, status = 'queued', providerMessageId = null, rawPayload = null }) {
   const { rows } = await pool.query(
     `INSERT INTO sms_logs (phone, message, status, provider_message_id, raw_payload)
@@ -338,6 +398,8 @@ module.exports = {
   createRating,
   createRatingByPhones,
   getContractParties,
+  getContractByRefForPhone,
+  upsertWorkVerification,
   logSms,
   writeAudit,
 };
